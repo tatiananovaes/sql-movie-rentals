@@ -1,0 +1,88 @@
+/*Query 1 - For the top 10 paying customers, how many payments they made on a monthly basis during 2007 and what was the amount of the montlhy payments?*/
+	
+WITH t1 AS	(SELECT c.customer_id, c.first_name || ' ' || c.last_name AS full_name,	SUM(p.amount) AS pay_amount
+			FROM customer c
+			JOIN payment p
+			ON c.customer_id = p.customer_id
+			GROUP BY 1,2
+			ORDER BY 3 DESC
+			LIMIT 10)
+	
+SELECT EXTRACT('month' FROM DATE_TRUNC('month', p.payment_date)) AS pay_month, t1.full_name,
+			COUNT(*) AS pay_count, SUM(p.amount) AS pay_amount
+FROM t1
+JOIN payment p
+ON t1.customer_id=p.customer_id
+GROUP BY 1,2
+ORDER BY 2,1;
+
+
+
+
+/*Query 2 -  For the top 10 paying customers, what is the difference across their monthly payments during 2007?*/
+	
+WITH t1 AS	(SELECT c.customer_id, c.first_name || ' ' || c.last_name AS full_name,	SUM(p.amount) AS pay_amount
+			FROM customer c
+			JOIN payment p
+			ON c.customer_id = p.customer_id
+			GROUP BY 1,2
+			ORDER BY 3 DESC
+			LIMIT 10),
+			
+	 t2 AS (SELECT EXTRACT('month' FROM DATE_TRUNC('month', p.payment_date)) AS pay_month, t1.full_name AS full_name,
+			COUNT(*) AS pay_count, SUM(p.amount) AS pay_amount
+			FROM t1
+			JOIN payment p
+			ON t1.customer_id = p.customer_id
+			GROUP BY 1,2
+			ORDER BY 2,1)
+			
+SELECT t2.pay_month, t2.full_name, t2.pay_amount,
+			LAG(t2.pay_amount) OVER (ORDER BY t2.pay_amount) AS lag,
+			t2.pay_amount - LAG(t2.pay_amount) OVER (PARTITION BY t2.full_name ORDER BY t2.pay_amount) AS lag_diff
+FROM t2
+ORDER BY 2,1;
+
+
+
+
+/*Query 3 - For the categories considered family movies, what is the number of times that each movie has been rented out?*/
+
+WITH t1 AS (SELECT f.title AS film_title, ca.name AS category_name, r.rental_id AS rent_id, count(*) AS rent_count
+			FROM category ca
+			JOIN film_category fc
+			ON ca.category_id = fc.category_id
+			JOIN film f
+			ON fc.film_id = f.film_id
+			JOIN inventory i
+			ON f.film_id = i.film_id
+			JOIN rental r
+			ON i.inventory_id = r.inventory_id
+			WHERE ca.name IN ('Animation', 'Children', 'Classics', 'Comedy', 'Family', 'Music')
+            GROUP BY 1,2,3
+            ORDER BY 2,1)
+
+SELECT film_title, category_name, SUM(rent_count) as total_rent
+FROM t1
+GROUP BY 1, 2
+ORDER BY 2,1;
+
+
+
+
+/*Query 4 - What is the quartile and count of movies of each category of family movies based on the rental duration?*/
+ 
+
+WITH t1 AS (SELECT f.title AS film_title, ca.name AS category_name, f.rental_duration AS rental_duration,
+			NTILE(4) OVER (ORDER BY rental_duration) AS quartile
+			FROM category ca
+			JOIN film_category fc
+			ON ca.category_id = fc.category_id
+			JOIN film f
+			ON fc.film_id = f.film_id
+			WHERE ca.name IN ('Animation', 'Children', 'Classics', 'Comedy', 'Family', 'Music'))
+
+SELECT category_name, quartile, COUNT(*) as count
+FROM t1
+GROUP BY 1,2
+ORDER BY 1,2;
